@@ -1,3 +1,3 @@
 # Session Index
 
-- [Session 1763917478](1763917478.md)
+- [Planning Foundations Setup](1763917478.md)
