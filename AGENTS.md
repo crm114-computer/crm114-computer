@@ -5,7 +5,7 @@
 - Create `index.md` linking every session file.
 - Name each session file with the request timestamp (Unix epoch) and use markdown checklists.
 - Capture observations, known issues, caveats, and follow-ups per session.
-- Ensure plans describe Go packages, modules, and binaries explicitly.
+- Ensure plans describe Go packages, modules, binaries, and expected `go test` coverage.
 
 ## Branching & Commits
 - Start every session on a fresh git branch named for the session.
