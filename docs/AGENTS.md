@@ -1,0 +1,1 @@
+Directory hosts project documentation in markdown. Add new files per subsystem and keep references consistent.
