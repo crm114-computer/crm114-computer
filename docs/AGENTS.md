@@ -1,1 +1,1 @@
-Directory hosts project documentation in markdown. Add new files per subsystem and keep references consistent.
+Directory hosts Go-focused documentation in markdown. Describe package boundaries, module usage, and link subsystem guides for Go services.

@@ -1,1 +1,1 @@
-Directory stores planning artifacts for each Crush session. Keep index.md linking session files named by Unix epoch. Maintain markdown checklists and notes.
+Directory stores planning artifacts for each Crush session. Keep index.md linking session files named by Unix epoch. Maintain markdown checklists and notes describing Go deliverables, tests, and package plans.
