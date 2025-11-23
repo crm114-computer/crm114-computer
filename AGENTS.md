@@ -10,7 +10,8 @@
 - Never leave unchecked tasks in any plan file; conclude with `## Debrief` summarizing per-task outcomes, executed tests (with pass/fail status), research artifacts, git activity, and merge status.
 
 ## Branching & Commits
-- Start every session on a fresh git branch named for the session.
+- Start every session on a fresh git branch whose name combines the session identifier and the work focus (e.g., `session-1763923696-branch-policy`).
+- Branches are session-exclusive: never reuse a branch across sessions; archive or merge before starting new work.
 - Commit aggressively as work progresses; roll back if necessary.
 - Keep commits scoped to specific Go modules or features whenever possible.
 - Track all git activity (branch creation, commits, merges) and include a summary in the plan debrief and user response.
