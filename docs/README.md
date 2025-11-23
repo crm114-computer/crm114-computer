@@ -7,3 +7,4 @@
 - Keep `docs/research/index.md` updated as the canonical table of contents for all research artifacts.
 - Reflect plan completion requirements in documentation when referencing session outcomes, noting any `## Won't Do` decisions.
 - Include research summaries and references to docs/research artifacts within session debriefs and user responses.
+- Ensure every directory under `docs/` maintains a human-facing `README.md` describing its contents; update affected READMEs whenever files in that directory change in material ways.

@@ -23,8 +23,9 @@
 
 ## Development Flow
 - Practice TDD in Go: write failing Go tests (`go test ./...`) that cover the plan before implementing code.
-- Maintain `docs/` with human-readable Markdown documents and cross-links that describe Go architecture and APIs.
-- Add an `AGENTS.md` to each directory describing its purpose, Go packages, and modules contained within.
+- Maintain `docs/` with human-readable markdown documents and cross-links that describe Go architecture and APIs.
+- Add an `AGENTS.md` **and a human-facing `README.md`** to each directory describing its purpose, Go packages, and modules contained within. README files must be updated whenever files in that directory change in a way that affects user understanding.
+- If you create a new directory, author its README before leaving the task.
 - Use idiomatic Go tooling (go fmt, go test, go vet) as part of every change, recording results in the plan debrief.
 - Keep practices Go-centric unless requirements dictate otherwise.
 
