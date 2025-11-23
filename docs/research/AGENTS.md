@@ -1,0 +1,1 @@
+Directory stores technical research authored by agents. Every document must be professional markdown with clear hierarchy, data-backed analysis, and actionable conclusions for Go developers. Cross-reference related research via docs/research/index.md.

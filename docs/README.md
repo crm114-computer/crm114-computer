@@ -3,3 +3,5 @@
 - Provide session and architectural notes focused on Go services, packages, and binaries.
 - Link architecture discussions to Go modules and packages.
 - Capture Go build, test, and deployment procedures in detail.
+- Record research findings in `docs/research/` with professional, deeply-structured Markdown targeted at Go developers and agents.
+- Keep `docs/research/index.md` updated as the canonical table of contents for all research artifacts.

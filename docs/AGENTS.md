@@ -1,1 +1,1 @@
-Directory hosts Go-focused documentation in markdown. Describe package boundaries, module usage, and link subsystem guides for Go services.
+Directory hosts Go-focused documentation in markdown. Describe package boundaries, module usage, research outputs, and link subsystem guides for Go services. Keep docs/research populated with professional, deeply structured reports indexed via docs/research/index.md.
