@@ -6,6 +6,8 @@
 - Name each session file with the request timestamp (Unix epoch) and use markdown checklists.
 - Capture observations, known issues, caveats, and follow-ups per session.
 - Ensure plans describe Go packages, modules, binaries, expected `go test` coverage, and required research deliverables.
+- Complete every plan item before ending a session; if something cannot be done without a user answer, move it to `## Won't Do` with a justification.
+- Never leave unchecked tasks in any plan file.
 
 ## Branching & Commits
 - Start every session on a fresh git branch named for the session.
