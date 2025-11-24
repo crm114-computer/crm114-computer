@@ -1,6 +1,7 @@
-# Session Index
+# Plan Index
 
-- [Planning Foundations Setup](1763917478.md)
-- [AGENTS Compliance Review](1763923696.md)
-- [Installer & TUI Implementation](1763925027.md)
-- [README Coverage Update](1763925065.md)
+## Atomic Work Unit Status
+- **Last atomic work unit:** Restored crm114 SSH reachability via key + home ownership enforcement ([Hidden User SSH Bootstrap](1763950039.md))
+- **Next atomic work unit:** Write uninstall rollback flow covering sshd, hidden user, and local assets ([Hidden User SSH Bootstrap](1763950039.md))
+
+- [Hidden User SSH Bootstrap](1763950039.md) – Gum flow + reinstall cleanup + forced passwordless SSH
