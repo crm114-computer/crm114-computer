@@ -77,6 +77,35 @@
 - `plutil -extract HiddenUsersList raw /Library/Preferences/com.apple.loginwindow.plist | grep 'crm114'` ensures the loginwindow array contains the entry exactly once.
 - `sysadminctl -secureTokenStatus crm114` output logged as part of verification; anything other than `SecureToken is DISABLED for user crm114` is a blocker.
 
+## Messaging Narrative
+
+### Story beats
+- **Preflight gating** — Tell the operator we are confirming cached sudo credentials and admin membership once, emphasize that passwords never leave the terminal, and hint that hidden-account work cannot continue without that confirmation.
+- **Account creation and hardening** — Explain that `crm114` is a helper account with no login window presence, a locked shell, and a hidden home used strictly for automation; highlight that it inherits only the permissions we assign and can be audited any time.
+- **Verification** — Describe how we double-check DirectoryService attributes, the hidden home, and loginwindow state before moving on; surface only high-level privacy assurances unless the user opted into debug logs.
+- **Wrap-up** — Reassure the operator that nothing changes about their own account, point to the commands they can run to inspect `crm114`, and state how to remove it with the uninstaller if desired.
+- **Failure / remediation** — When a drift or collision blocks progress, show copy that names the mismatched attribute (UID, home path, SecureToken, etc.) and explains how to fix it before re-running the installer.
+
+### Gum-mode copy (default UX)
+| Stage | Title | Primary copy | Secondary copy |
+| --- | --- | --- | --- |
+| Preflight | "Confirming your admin powers" | "We ask macOS once to prove you can run sudo so the hidden helper stays under your control." | "Your password never leaves this Mac; we just need a thumbs-up before continuing." |
+| Account creation | "Creating the hidden crm114 helper" | "crm114 is a passwordless background account with a hidden home directory." | "It only runs installer-managed automation and stays invisible to the login window." |
+| Verification | "Double-checking crm114's footprint" | "We verify its home, hidden status, and DirectoryService fields so nothing drifts." | "If anything looks off we'll pause and show you how to repair it." |
+| Wrap-up | "crm114 helper is ready" | "You can inspect it anytime with 'sudo dscl . -read /Users/crm114' or remove it via our uninstaller." | "We log every change so support can audit the run later." |
+| Failure / remediation | "crm114 needs attention" | "macOS reported a conflicting UID/home/attribute. Nothing was changed." | "Fix the noted issue (see debug log snippet below) and rerun the installer when ready." |
+
+### Simple-mode copy (`CRM114_SIMPLE_MODE=1`)
+- Preflight: print `==> Checking sudo access so we can add the hidden crm114 helper...` and, on success, `✓ Sudo confirmed; continuing with hidden account setup.`
+- Account creation: print `==> Creating the hidden crm114 helper (no login window entry, locked shell)...` followed by `✓ crm114 created and passwordless.`
+- Verification: print `==> Verifying crm114 attributes, hidden home, and loginwindow entry...` followed by either `✓ crm114 looks good and stays hidden.` or an error prefixed with `!!` plus the attribute that failed.
+- Wrap-up: print `==> Hidden helper ready. Inspect anytime with: sudo dscl . -read /Users/crm114` and follow with `Run ./install.sh --remove` (or equivalent) as the removal pointer.
+
+### Debug + SecureToken messaging
+- Default copy omits SecureToken references; on success we simply log that crm114 stays hidden. The only times SecureToken is mentioned are when `sysadminctl -secureTokenStatus` returns anything other than `DISABLED` or when the operator passes `--debug`.
+- When `--debug` (or `$CRM114_DEBUG=1`) is set, append `[debug] crm114 SecureToken status: <status>` after the verification step so advanced users see the precise output.
+- On failure, surface a Gum alert / simple-mode `!!` line saying `crm114 must have SecureToken disabled; macOS reported <status>. Remove conflicting policies and rerun.` This keeps the setting implicit for successful runs yet explicit when remediation is required.
+
 ## Milestones / Phases
 1. **UID Strategy Finalization** – Document decision, detection flow, and collision handling playbook.
 2. **Attribute & Filesystem Spec** – Complete the field matrix + required permissions/ownership notes.
@@ -102,7 +131,7 @@
 ## Checklist
 - [x] account-spec-uid-policy — Finalize UID/GID selection, collision detection, and documentation.
 - [x] account-spec-attributes — Produce authoritative attribute/filesystem matrix (dscl keys, permissions, SecureToken stance).
-- [ ] account-spec-messaging — Draft Gum/simple-mode narratives explaining the hidden account to operators.
+- [x] account-spec-messaging — Draft Gum/simple-mode narratives explaining the hidden account to operators.
 - [ ] account-spec-docs — Update parent plan + research docs with finalized spec and acceptance criteria.
 
 ## Linked Tasks

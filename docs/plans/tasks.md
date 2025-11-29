@@ -2,21 +2,19 @@
 
 ## Next Task
 
-- [x] account-spec-attributes — Produce authoritative attribute/filesystem matrix and SecureToken stance (plan: hidden-user-account-spec)
+- [ ] hidden-user-provisioning — Implement account creation, passwordless hardening, and home directory setup in install.sh (plan: hidden-user-bootstrap)
 
 ## Upcoming Tasks
 
-- [ ] account-spec-messaging — Draft Gum/simple-mode narratives explaining the hidden account (plan: hidden-user-account-spec)
-- [ ] account-spec-docs — Update parent plan and research docs with the finalized spec (plan: hidden-user-account-spec)
-- [ ] account-spec-messaging — Draft Gum/simple-mode narratives explaining the hidden account (plan: hidden-user-account-spec)
-- [ ] account-spec-docs — Update parent plan and research docs with the finalized spec (plan: hidden-user-account-spec)
-- [ ] hidden-user-provisioning — Implement account creation, passwordless hardening, and home directory setup in install.sh (plan: hidden-user-bootstrap)
 - [ ] hidden-user-hiding — Apply IsHidden, HiddenUsersList updates, AuthenticationAuthority changes, and verify GUI suppression (plan: hidden-user-bootstrap)
 - [ ] hidden-user-idempotence — Build verification/drift-repair logic and add scripted tests (plan: hidden-user-bootstrap)
 - [ ] hidden-user-removal — Provide uninstaller routines to delete the account, hidden home, and related plist entries (plan: hidden-user-bootstrap)
 
 ## Completed Tasks
 
+- [x] account-spec-attributes — Produce authoritative attribute/filesystem matrix and SecureToken stance (plan: hidden-user-account-spec)
+- [x] account-spec-messaging — Draft Gum/simple-mode narratives explaining the hidden account (plan: hidden-user-account-spec)
+- [x] account-spec-docs — Update parent plan and research docs with the finalized spec (plan: hidden-user-account-spec)
 - [x] hidden-user-sudo-checks — Implement sudo eligibility detection, timeout handling, and admin membership validation (plan: hidden-user-bootstrap)
 - [x] installer-debug-flag — Add a --debug flag to install.sh to surface verbose tracing that unblocks hidden-user-sudo-checks validation (plan: installer-debug-flag)
 - [x] inst-detector-tests — Add automated validation for detection logic (plan: installer-detection)

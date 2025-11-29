@@ -27,22 +27,28 @@ fi
 
 ### Account creation & passwordless hardening
 ```
-RESERVED_UID=550
-TEMP_PASSWORD=$(LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c 32)
 sysadminctl -addUser crm114 \
-  -UID "$RESERVED_UID" \
   -fullName "CRM114 Service" \
   -home /Users/.crm114 \
   -shell /usr/bin/false \
   -password - <<<"$TEMP_PASSWORD"
+UID=$(dscl . -read /Users/crm114 UniqueID | awk '{print $2}')
+# ensure primary group matches UID
+if ! dscl . -read /Groups/crm114 >/dev/null 2>&1; then
+  dscl . -create /Groups/crm114
+fi
+dscl . -create /Groups/crm114 PrimaryGroupID "$UID"
+dscl . -create /Groups/crm114 Password "*"
+dscl . -append /Groups/crm114 GroupMembership crm114
+dscl . -create /Users/crm114 PrimaryGroupID "$UID"
 ```
 Attribute requirements:
 | Attribute | Value | Purpose |
 | --- | --- | --- |
 | `UserShell` | `/usr/bin/false` | Prevents login shells even if user is revealed |
 | `NFSHomeDirectory` | `/Users/.crm114` | Hidden home path |
-| `UniqueID` | `>=500` (recommend 550) | Avoid conflicts with system accounts |
-| `PrimaryGroupID` | `20` (`staff`) | Standard macOS non-admin group |
+| `UniqueID` | Auto-assigned by macOS (>=501) but must remain stable once created | Avoids collisions while keeping UIDs unique per host |
+| `PrimaryGroupID` | Dedicated `crm114` group whose GID matches `UniqueID` | Keeps permissions isolated; no reliance on `staff` |
 | `AuthenticationAuthority` | `;DisabledUser;` | Denies GUI loginwindow auth and disables password prompts |
 | `IsHidden` | `1` | Hides from loginwindow and fast user switching |
 
@@ -57,11 +63,13 @@ Setting `Password "*"` and removing `ShadowHashData` leaves no hash on disk. Pai
 ### Home directory creation & permissions
 ```
 createhomedir -c -u crm114 >/dev/null
-chown -R crm114:staff /Users/.crm114
+chown -R crm114:crm114 /Users/.crm114
+install -m 600 -o crm114 -g crm114 /dev/null /Users/.crm114/.crm114-profile
 chmod 700 /Users/.crm114
 ```
 - Running `createhomedir` ensures macOS populates default dotfiles even though the path is hidden.
-- Enforce `0700` permissions after any installer rerun to preserve privacy.
+- The `.crm114-profile` sentinel stores creation metadata (timestamp, UID) for drift detection.
+- Enforce `0700` permissions (and `0600` for the sentinel) after any installer rerun to preserve privacy.
 
 ### Hiding from GUI & fast user switching
 ```
@@ -77,7 +85,7 @@ python -c 'import json; import sys; import subprocess;\narr=json.load(open("/tmp
 ```
 - Prefer `PlistBuddy` over `defaults write` to avoid plist reformatting; ensure duplicate entries aren’t added by inspecting the JSON representation first.
 - `IsHidden=1` plus membership in `HiddenUsersList` covers Ventura/Sonoma loginwindow; maintain both for compatibility.
-- Ensure account lacks SecureToken/admin rights: `sysadminctl -secureTokenStatus crm114` should return “DISABLED”. If not, run `sysadminctl -secureTokenOff crm114 -password - <<<"$TEMP_PASSWORD"` before wiping the password (or confirm SecureToken never enabled when using disabled AuthenticationAuthority).
+- Ensure account lacks SecureToken/admin rights: `sysadminctl -secureTokenStatus crm114` should return “DISABLED”. If not, run `sysadminctl -secureTokenOff crm114 -password - <<<"$TEMP_PASSWORD"` before wiping the password (or confirm SecureToken never enabled when using disabled AuthenticationAuthority). Only mention the SecureToken status in operator-facing copy when remediation is required or when `--debug` is supplied, where we log `[debug] crm114 SecureToken status: <status>`.
 
 ### Verification & idempotence
 ```
@@ -111,12 +119,12 @@ sudo rm -rf /Users/.crm114 || true
 4. **Installer .pkg with pre-created user template** – Complicates updates and SIP interactions; rejected.
 
 ## Decision / Recommendation
-- Adopt Option 2 (sysadminctl + hardening) with reserved UID 550 and `staff` group.
+- Adopt Option 2 (sysadminctl + hardening) with macOS auto-assigning the UID and a dedicated `crm114` group matching that UID; avoid relying on shared `staff` membership so permissions stay isolated per host.
 - Enforce sudo preflight using the combined `sudo -n true` / `sudo -v` flow plus `dsmemberutil` membership check; abort when the user cannot elevate.
 - Automate hiding via `IsHidden=1` and `HiddenUsersList` updates through `PlistBuddy`, ensuring deduplication.
 - After provisioning, immediately wipe password artifacts (`Password "*"`, remove `ShadowHashData`, enforce `;DisabledUser;`). The account becomes passwordless, eliminating rotation while preventing any authentication prompts.
-- Use `createhomedir -c -u crm114` followed by ownership/permission enforcement; wrap operations with `with_spinner` for Gum transparency.
-- Implement verification routines that log attribute values and explicitly test negative login attempts; provide cleanup commands that reverse every change.
+- Use `createhomedir -c -u crm114`, enforce `/Users/.crm114` ownership `crm114:crm114`, create the `.crm114-profile` sentinel for drift detection, and wrap operations with `with_spinner` for Gum transparency.
+- Implement verification routines that log attribute values, optionally report SecureToken status when `--debug` is set, and explicitly test negative login attempts; provide cleanup commands that reverse every change.
 
 ## References / Links
 - `man sysadminctl`

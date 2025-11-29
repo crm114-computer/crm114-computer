@@ -6,7 +6,7 @@
 - Current plans (`gum-powered-installer`, `installer-detection`) do not cover privileged account provisioning, sudo validation, or hidden-user lifecycle management.
 
 ## Goals
-- Provision a hidden, non-loginable macOS user `crm114` with home `/Users/.crm114`, owned `crm114:staff`, permissions `0700`.
+- Provision a hidden, non-loginable macOS user `crm114` with home `/Users/.crm114`, owned `crm114:crm114`, permissions `0700`.
 - Enforce sudo eligibility preflight so the installer only proceeds when the invoking operator can obtain sudo.
 - Harden the account: hide from GUI lists, disable GUI logins, set shell to `/usr/bin/false`, eliminate stored passwords, and ensure the hidden home directory stays private.
 - Ensure idempotent behavior: detect existing accounts, repair drift, and safely skip when already compliant.
@@ -26,9 +26,9 @@
 ## High-Level Approach
 1. **Preflight Validation**: Check for sudo capability (`sudo -n true || sudo -v`), confirm the caller is in the `admin` group, and gather system facts.
 2. **Idempotent Detection**: Use `dscl . -read /Users/crm114` to determine whether the account exists and whether attributes match requirements.
-3. **Provisioning Flow**: Create the account via `sysadminctl -addUser crm114 -UID <reserved> -home /Users/.crm114 -shell /usr/bin/false -password <random>`.
-4. **Hardening & Hiding**: Apply `IsHidden=1`, add to `HiddenUsersList`, ensure `AuthenticationAuthority` disables GUI logins, lock down `/Users/.crm114` with `chmod 700`.
-5. **Verification & Cleanup Hooks**: Re-read account attributes, confirm hidden status, log results, and document removal path (reverse operations, remove home, update HiddenUsersList, delete plist entries).
+3. **Provisioning Flow**: Let `sysadminctl` auto-assign the next available UID/GID pair, create a dedicated `crm114` group that matches the UID, set the home to `/Users/.crm114`, shell to `/usr/bin/false`, and capture a temporary password that will be scrubbed immediately after attribute tuning.
+4. **Hardening & Hiding**: Enforce passwordless state (`Password "*"`, remove `ShadowHashData`), set `AuthenticationAuthority` to `;DisabledUser;`, set `IsHidden=1`, ensure `HiddenUsersList` includes `crm114`, and lock down `/Users/.crm114` plus the sentinel file with `chmod 700/600` ownership `crm114:crm114`.
+5. **Verification & Cleanup Hooks**: Compare DirectoryService reads against the attribute matrix, cross-check sentinel metadata for UID/GID drift, log results (including optional `--debug` SecureToken status), and document removal steps that reverse each change.
 
 ## Milestones / Phases
 1. **Research & Spec Finalization** – Capture mechanics for hidden accounts (completed via `docs/research/hidden-user-bootstrap.md`).
@@ -42,19 +42,17 @@
 - Misconfigured attributes could expose the account or block shell automation; thorough validation is required.
 - Manipulating loginwindow defaults may affect other hidden users; edits must be scoped precisely and reversible.
 - Future macOS changes to directory services tooling could break assumptions; monitoring required.
-- Reserved UID collisions may occur if another tool uses the same number; detection must verify availability first.
+- Auto-assigned UID/GID values vary per host; drift detection must compare DirectoryService and filesystem metadata to stay consistent.
 
 ## Open Questions
-- What UID/GID should `crm114` use? (Default auto-assigned vs. fixed high UID such as 550.)
-- Do we need additional auditing/logging of actions performed as `crm114`?
-- Should the installer set `SecureToken` or explicitly avoid it for this account?
+- Do we need additional auditing/logging of actions performed as `crm114` beyond installer traces?
 
 ## Related Research
 - `docs/research/hidden-user-bootstrap.md`
 
 ## Checklist
 - [x] Sudo/admin eligibility checks with debug visibility (`hidden-user-sudo-checks`, `installer-debug-flag`)
-- [ ] Account specification (UID/GID, attributes, Gum narrative) (`hidden-user-account-spec`)
+- [x] Account specification (UID/GID, attributes, Gum narrative) (`hidden-user-account-spec`)
 - [ ] Account provisioning & hardening flow in `install.sh` (`hidden-user-provisioning`)
 - [ ] GUI hiding and AuthenticationAuthority adjustments (`hidden-user-hiding`)
 - [ ] Idempotence + verification tooling (`hidden-user-idempotence`)
@@ -62,7 +60,7 @@
 
 ## Linked Tasks
 - `hidden-user-sudo-checks` – Implement sudo eligibility detection, timeout handling, and admin membership validation.
-- `hidden-user-account-spec` – Document UID reservation, attribute requirements, and Gum messaging narrative.
+- `hidden-user-account-spec` – Document auto-assigned UID/GID policy, attribute matrix, Gum/simple-mode messaging, and SecureToken posture.
 - `hidden-user-provisioning` – Implement account creation, password generation, and home directory setup in `install.sh`.
 - `hidden-user-hiding` – Apply IsHidden, HiddenUsersList updates, AuthenticationAuthority changes, and verify GUI suppression.
 - `hidden-user-idempotence` – Build verification/drift-repair logic and add scripted tests.
