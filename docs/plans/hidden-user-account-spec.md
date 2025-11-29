@@ -30,6 +30,53 @@
 4. **Acceptance Checklist**: Capture verification steps (e.g., `dscl` reads, permission checks) that provisioning/hiding steps must satisfy; integrate into tests later.
 5. **Documentation Updates**: Feed finalized decisions into `docs/research/hidden-user-bootstrap.md`, the parent plan, and installer copy references.
 
+## Attribute & Filesystem Specification
+
+### DirectoryService attribute matrix
+| Attribute | Required value | Detect & repair |
+| --- | --- | --- |
+| `RecordName`, `RealName` | `crm114`; `CRM114 Service Account` | `dscl . -read /Users/crm114 RecordName RealName`. Recreate with `dscl . -create /Users/crm114 RecordName crm114` and `... RealName "CRM114 Service Account"` if drifted. |
+| `UniqueID` | Let `sysadminctl` auto-assign the next available UID (>=501). Once created, the UID must stay stable. | `UID=$(dscl . -read /Users/crm114 UniqueID | awk '{print $2}')`. Ensure `dscl . -search /Users UniqueID "$UID"` returns only `crm114`; otherwise abort and instruct the operator to remove the conflicting record before reinstalling. |
+| `PrimaryGroupID` | Dedicated `crm114` group whose GID matches `UniqueID`. No admin membership. | `dscl . -read /Groups/crm114 PrimaryGroupID` must equal the UID above. Repair via `dscl . -create /Groups/crm114 PrimaryGroupID "$UID"` and `dscl . -append /Groups/crm114 GroupMembership crm114`. Confirm `dsmemberutil checkmembership -U crm114 -G admin` exits non-zero. |
+| `UserShell` | `/usr/bin/false` | `dscl . -read /Users/crm114 UserShell`. Reset with `dscl . -create /Users/crm114 UserShell /usr/bin/false`. |
+| `NFSHomeDirectory` | `/Users/.crm114` | `dscl . -read /Users/crm114 NFSHomeDirectory`. If wrong, `dscl . -create /Users/crm114 NFSHomeDirectory /Users/.crm114` and rerun `createhomedir -c -u crm114`. |
+| `Password`, `ShadowHashData` | `Password "*"` and **no** `ShadowHashData` node to keep the account passwordless. | `dscl . -read /Users/crm114 Password` must equal `*`. `dscl . -read /Users/crm114 ShadowHashData` should return non-zero; if it exists, delete with `dscl . -delete /Users/crm114 ShadowHashData`. |
+| `AuthenticationAuthority` | First entry must be `;DisabledUser;`. Additional Apple-managed tokens may follow but must not re-enable login. | `dscl . -read /Users/crm114 AuthenticationAuthority | grep ';DisabledUser;'`. Reapply with `dscl . -create /Users/crm114 AuthenticationAuthority ";DisabledUser;"`. |
+| `IsHidden` | `1` | `dscl . -read /Users/crm114 IsHidden`. Repair with `dscl . -create /Users/crm114 IsHidden 1`. |
+| `GeneratedUID` | Stable UUID assigned at creation. Needed for ACL references. | `dscl . -read /Users/crm114 GeneratedUID`. Never overwrite; treat changes as corruption and require operator intervention. |
+| Secondary groups | No automatic `admin` membership; optional `staff` secondary membership only if POSIX paths demand it. | `dsmemberutil checkmembership -U crm114 -G staff` may be used for diagnostics. Refuse to add any other groups without an explicit future requirement. |
+
+### Filesystem state
+| Path | Owner / Group | Mode | Enforcement |
+| --- | --- | --- | --- |
+| `/Users/.crm114` | `crm114:crm114` | `0700` | Create with `createhomedir -c -u crm114`. Reapply `chown -R crm114:crm114 /Users/.crm114` and `chmod 700 /Users/.crm114` on every run. |
+| `/Users/.crm114/.crm114-profile` (sentinel) | `crm114:crm114` | `0600` | Write installer state (e.g., creation timestamp + UID) to this file so drift detection can confirm ownership without inspecting arbitrary payloads. |
+| `/Library/Preferences/com.apple.loginwindow.plist` | `root:wheel` | `0644` | Must contain `HiddenUsersList` entry `crm114`. Update via `/usr/libexec/PlistBuddy` while preserving other entries. |
+| `/var/db/dslocal/nodes/Default/users/crm114.plist` | `root:wheel` | `0600` | Implicit DirectoryService backing store; touched only by `dscl`/`sysadminctl`. Validate existence indirectly via `dscl . -read`. |
+
+### Loginwindow & hiding signals
+- `HiddenUsersList` inside `/Library/Preferences/com.apple.loginwindow.plist` must include `crm114` exactly once. Extraction via `plutil -extract HiddenUsersList raw ...` ensures idempotence before rewriting.
+- `IsHidden=1` (see matrix) is mandatory for Ventura/Sonoma where loginwindow may ignore the plist if the flag is unset.
+- `Accounts PrefPane` suppression is verified with `dscl . -read /Users/crm114 AuthenticationAuthority` to guarantee `;DisabledUser;` remains the first token.
+
+### Drift detection & repair routine
+1. `dscl . -read /Users/crm114` for every key listed above; capture values for logging and comparison.
+2. Compare stored sentinel metadata (`/Users/.crm114/.crm114-profile`) against live UID/GID to ensure the filesystem and DirectoryService agree. If they diverge, prefer DirectoryService values and re-`chown` the tree.
+3. Inspect `/Library/Preferences/com.apple.loginwindow.plist` for duplicate or missing entries before mutating it; rebuild the array atomically when needed.
+4. Abort with actionable messaging if another account holds the expected UID/GID or if `GeneratedUID` changes, since that indicates manual tampering that automation must not auto-fix.
+
+### SecureToken & passwordless posture
+- `sysadminctl -secureTokenStatus crm114` must report `DISABLED`. Record the output; failing to do so blocks provisioning.
+- Never call `sysadminctl -secureTokenOn` for this account. If the OS auto-enables SecureToken (rare), immediately run `sysadminctl -secureTokenOff crm114 -password - <<<""` before the password is wiped, or instruct the operator to remove and recreate the account.
+- Keep the account passwordless by setting `Password "*"`, deleting `ShadowHashData`, and ensuring no `AuthenticationAuthority` entry reintroduces password-backed flows.
+
+### Acceptance sampling commands
+- `dscl . -read /Users/crm114 RecordName RealName UniqueID PrimaryGroupID UserShell NFSHomeDirectory AuthenticationAuthority IsHidden` must match the table above.
+- `dscl . -read /Groups/crm114 PrimaryGroupID GroupMembership` must show `crm114` as both the owner and only member.
+- `stat -f '%Su %Sg %Sp' /Users/.crm114` must print `crm114 crm114 drwx------`.
+- `plutil -extract HiddenUsersList raw /Library/Preferences/com.apple.loginwindow.plist | grep 'crm114'` ensures the loginwindow array contains the entry exactly once.
+- `sysadminctl -secureTokenStatus crm114` output logged as part of verification; anything other than `SecureToken is DISABLED for user crm114` is a blocker.
+
 ## Milestones / Phases
 1. **UID Strategy Finalization** – Document decision, detection flow, and collision handling playbook.
 2. **Attribute & Filesystem Spec** – Complete the field matrix + required permissions/ownership notes.
@@ -54,7 +101,7 @@
 
 ## Checklist
 - [x] account-spec-uid-policy — Finalize UID/GID selection, collision detection, and documentation.
-- [ ] account-spec-attributes — Produce authoritative attribute/filesystem matrix (dscl keys, permissions, SecureToken stance).
+- [x] account-spec-attributes — Produce authoritative attribute/filesystem matrix (dscl keys, permissions, SecureToken stance).
 - [ ] account-spec-messaging — Draft Gum/simple-mode narratives explaining the hidden account to operators.
 - [ ] account-spec-docs — Update parent plan + research docs with finalized spec and acceptance criteria.
 

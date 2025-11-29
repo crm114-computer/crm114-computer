@@ -2,7 +2,7 @@
 
 ## Next Task
 
-- [ ] account-spec-attributes — Produce authoritative attribute/filesystem matrix and SecureToken stance (plan: hidden-user-account-spec)
+- [x] account-spec-attributes — Produce authoritative attribute/filesystem matrix and SecureToken stance (plan: hidden-user-account-spec)
 
 ## Upcoming Tasks
 
