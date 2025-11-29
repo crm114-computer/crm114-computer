@@ -1,5 +1,4 @@
 # Research Index
 
-1. [Charm Stack & macOS Hidden User SSH Research](charm-stack-and-macos-hidden-user.md)
-2. [crm114 Fantasy Workstation Installer Plan](crm114-install-script-plan.md)
-3. [AGENTS Protocol Compliance Review](agents-compliance-review.md)
+1. Gum interface library evaluation — Capabilities, installation, and usage guidance for Gum in our installer (`docs/research/gum-interface-library.md`)
+2. Hidden user bootstrap research — Hidden account creation, sudo gating, and GUI suppression strategy (`docs/research/hidden-user-bootstrap.md`)
