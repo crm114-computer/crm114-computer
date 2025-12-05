@@ -12,6 +12,7 @@
 
 ## Completed Tasks
 
+- [x] account-spec-uid-policy — Finalize UID/GID selection, collision detection strategy, and documentation (plan: hidden-user-account-spec)
 - [x] account-spec-attributes — Produce authoritative attribute/filesystem matrix and SecureToken stance (plan: hidden-user-account-spec)
 - [x] account-spec-messaging — Draft Gum/simple-mode narratives explaining the hidden account (plan: hidden-user-account-spec)
 - [x] account-spec-docs — Update parent plan and research docs with the finalized spec (plan: hidden-user-account-spec)
