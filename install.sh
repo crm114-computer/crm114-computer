@@ -16,6 +16,12 @@ if [ -n "${CRM114_INSTALLER_DEBUG:-}" ] && [ "${CRM114_INSTALLER_DEBUG:-}" != "0
     CRM114_DEBUG=1
 fi
 CRM114_CURRENT_STAGE="init"
+CRM114_SERVICE_USER="${CRM114_SERVICE_USER:-crm114}"
+CRM114_SERVICE_REALNAME="${CRM114_SERVICE_REALNAME:-CRM114 Service Account}"
+CRM114_HIDDEN_HOME="${CRM114_HIDDEN_HOME:-/Users/.crm114}"
+CRM114_HIDDEN_SENTINEL="${CRM114_HIDDEN_SENTINEL:-$CRM114_HIDDEN_HOME/.crm114-profile}"
+CRM114_SKIP_PROVISIONING="${CRM114_SKIP_PROVISIONING:-}"
+CRM114_PRIVILEGED_WRAPPER="${CRM114_PRIVILEGED_WRAPPER:-}"
 
 set_gum_available() {
     debug_msg "Evaluating Gum availability (simple_mode='${CRM114_SIMPLE_MODE:-}')"
@@ -92,6 +98,25 @@ fail() {
     exit 1
 }
 
+run_privileged() {
+    if [ -n "$CRM114_PRIVILEGED_WRAPPER" ]; then
+        "$CRM114_PRIVILEGED_WRAPPER" "$@"
+    else
+        sudo "$@"
+    fi
+}
+
+run_privileged_nonfatal() {
+    if [ -n "$CRM114_PRIVILEGED_WRAPPER" ]; then
+        "$CRM114_PRIVILEGED_WRAPPER" "$@" && return 0
+        return 1
+    fi
+    if sudo "$@"; then
+        return 0
+    fi
+    return 1
+}
+
 debug_enabled() {
     [ "$CRM114_DEBUG" -eq 1 ]
 }
@@ -157,6 +182,36 @@ with_spinner() {
     fi
 }
 
+run_privileged_with_spinner() {
+    title="$1"
+    shift
+    if [ -n "$CRM114_PRIVILEGED_WRAPPER" ]; then
+        set -- "$CRM114_PRIVILEGED_WRAPPER" "$@"
+    else
+        set -- sudo "$@"
+    fi
+    with_spinner "$title" "$@"
+}
+
+run_privileged_and_log() {
+    stage="$1"
+    shift
+    log_entry="$stage | $*"
+    if [ -n "$CRM114_PRIV_LOG" ]; then
+        printf '%s
+' "$log_entry" >>"$CRM114_PRIV_LOG"
+    fi
+    run_privileged "$@"
+}
+
+run_privileged_with_spinner_logged() {
+    stage="$1"
+    shift
+    cmd="$1"
+    shift
+    run_privileged_and_log "$stage" "$cmd" "$cmd" "$@"
+}
+
 has_brew() {
     command -v brew >/dev/null 2>&1
 }
@@ -193,19 +248,19 @@ require_sudo() {
     log_msg info "Confirming sudo access"
 
 
-    if sudo -n true 2>/dev/null; then
-        debug_msg "sudo -n true succeeded"
+    if run_privileged -n true 2>/dev/null; then
+        debug_msg "run_privileged -n true succeeded"
         success_msg "Sudo confirmed without prompt."
     else
-        debug_msg "sudo -n true failed; invoking sudo -v"
-        if sudo -v -B -n >/dev/null 2>&1; then
-            debug_msg "sudo -v non-interactive succeeded"
+        debug_msg "run_privileged -n true failed; invoking run_privileged -v"
+        if run_privileged -v -B -n >/dev/null 2>&1; then
+            debug_msg "run_privileged -v -B -n succeeded"
             success_msg "Sudo confirmed without prompt."
-        elif sudo -v >/dev/null 2>&1; then
-            debug_msg "sudo -v succeeded after prompt"
+        elif run_privileged -v >/dev/null 2>&1; then
+            debug_msg "run_privileged -v succeeded after prompt"
             success_msg "Sudo confirmed after authentication."
         else
-            debug_msg "sudo -v failed"
+            debug_msg "run_privileged sudo escalation failed"
             fail "Unable to obtain sudo; ensure you can run sudo before continuing."
         fi
     fi
@@ -224,12 +279,12 @@ start_sudo_keepalive() {
         return
     fi
 
-    sudo -n true 2>/dev/null || sudo -v || fail "Unable to refresh sudo credentials."
+    run_privileged -n true 2>/dev/null || run_privileged -v || fail "Unable to refresh sudo credentials."
 
     (
         while true; do
             sleep "$CRM114_SUDO_REFRESH_INTERVAL"
-            if ! sudo -n true >/dev/null 2>&1; then
+            if ! run_privileged -n true >/dev/null 2>&1; then
                 debug_msg "Sudo keepalive detected expired credentials"
                 break
             fi
@@ -300,6 +355,111 @@ detect_system() {
     success_msg "Environment verified: macOS $CRM114_MACOS_VERSION ($CRM114_ARCH)."
 }
 
+ensure_privileged_tools() {
+    if command -v ensure_privileged_tools >/dev/null 2>&1 && [ "$(command -v ensure_privileged_tools)" = "$0" ]; then
+        return 0
+    fi
+    required_tools="sysadminctl dscl createhomedir chown chmod install plutil /usr/libexec/PlistBuddy stat defaults"
+    missing=0
+    for tool in $required_tools; do
+        case "$tool" in
+            /usr/libexec/PlistBuddy)
+                plistbuddy_path="${CRM114_PLISTBUDDY_PATH:-/usr/libexec/PlistBuddy}"
+                if [ ! -x "$plistbuddy_path" ]; then
+                    log_msg error "Missing PlistBuddy at $plistbuddy_path"
+                    missing=1
+                fi
+                ;;
+            *)
+                if ! command -v "$tool" >/dev/null 2>&1; then
+                    log_msg error "Missing required tool: $tool"
+                    missing=1
+                fi
+                ;;
+        esac
+    done
+    [ "$missing" -eq 0 ] || fail "Missing required macOS tools"
+}
+
+current_timestamp() {
+    date +"%Y-%m-%dT%H:%M:%S%z"
+}
+
+read_dscl_value() {
+    key="$1"
+    run_privileged dscl . -read "/Users/$CRM114_SERVICE_USER" "$key" 2>/dev/null | awk 'NR>1{printf "%s", $0; next} {print $2}'
+}
+
+user_exists() {
+    run_privileged dscl . -read "/Users/$CRM114_SERVICE_USER" >/dev/null 2>&1
+}
+
+ensure_hidden_home_directory() {
+    run_privileged createhomedir -c -u "$CRM114_SERVICE_USER" >/dev/null
+    run_privileged chown -R "$CRM114_SERVICE_USER:$CRM114_SERVICE_USER" "$CRM114_HIDDEN_HOME"
+    run_privileged chmod 700 "$CRM114_HIDDEN_HOME"
+    if [ ! -d "$CRM114_HIDDEN_HOME" ]; then
+        fail "Hidden home $CRM114_HIDDEN_HOME missing after createhomedir"
+    fi
+}
+
+write_hidden_profile_sentinel() {
+    metadata="created=$(current_timestamp)"
+    tmpfile=$(mktemp)
+    printf '%s\n' "$metadata" >"$tmpfile"
+    run_privileged install -m 600 -o "$CRM114_SERVICE_USER" -g "$CRM114_SERVICE_USER" "$tmpfile" "$CRM114_HIDDEN_SENTINEL"
+    rm -f "$tmpfile"
+}
+
+provision_crm114_user() {
+    if [ -n "$CRM114_SKIP_PROVISIONING" ]; then
+        log_msg warn "Skipping hidden user provisioning per CRM114_SKIP_PROVISIONING"
+        return
+    fi
+
+    ensure_privileged_tools
+
+    if user_exists; then
+        log_msg info "Hidden user $CRM114_SERVICE_USER already exists; ensuring attributes"
+    else
+        temp_password="crm114-$(LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c 32)"
+        run_privileged_with_spinner "Creating hidden user" sysadminctl \
+            -addUser "$CRM114_SERVICE_USER" \
+            -fullName "$CRM114_SERVICE_REALNAME" \
+            -home "$CRM114_HIDDEN_HOME" \
+            -shell /usr/bin/false \
+            -password - <<EOF
+$temp_password
+EOF
+    fi
+
+    uid=$(read_dscl_value UniqueID)
+    [ -n "$uid" ] || fail "Failed to read UID for $CRM114_SERVICE_USER"
+
+    if ! run_privileged dscl . -read "/Groups/$CRM114_SERVICE_USER" >/dev/null 2>&1; then
+        run_privileged dscl . -create "/Groups/$CRM114_SERVICE_USER"
+    fi
+    run_privileged dscl . -create "/Groups/$CRM114_SERVICE_USER" PrimaryGroupID "$uid"
+    run_privileged dscl . -create "/Groups/$CRM114_SERVICE_USER" Password "*"
+    run_privileged dscl . -create "/Groups/$CRM114_SERVICE_USER" RecordName "$CRM114_SERVICE_USER"
+    run_privileged dscl . -append "/Groups/$CRM114_SERVICE_USER" GroupMembership "$CRM114_SERVICE_USER"
+    run_privileged dscl . -create "/Users/$CRM114_SERVICE_USER" PrimaryGroupID "$uid"
+
+    run_privileged dscl . -create "/Users/$CRM114_SERVICE_USER" RecordName "$CRM114_SERVICE_USER"
+    run_privileged dscl . -create "/Users/$CRM114_SERVICE_USER" RealName "$CRM114_SERVICE_REALNAME"
+    run_privileged dscl . -create "/Users/$CRM114_SERVICE_USER" UserShell /usr/bin/false
+    run_privileged dscl . -create "/Users/$CRM114_SERVICE_USER" NFSHomeDirectory "$CRM114_HIDDEN_HOME"
+    run_privileged dscl . -create "/Users/$CRM114_SERVICE_USER" Password "*"
+    run_privileged_nonfatal dscl . -delete "/Users/$CRM114_SERVICE_USER" ShadowHashData 2>/dev/null || true
+    run_privileged dscl . -create "/Users/$CRM114_SERVICE_USER" AuthenticationAuthority ";DisabledUser;"
+    run_privileged dscl . -create "/Users/$CRM114_SERVICE_USER" IsHidden 1
+
+    ensure_hidden_home_directory
+    write_hidden_profile_sentinel
+
+    log_msg info "Hidden user $CRM114_SERVICE_USER provisioned"
+}
+
 main() {
     set_stage "argument-parse"
     parse_args "$@"
@@ -326,8 +486,11 @@ main() {
     set_stage "system-detection"
     detect_system
 
+    set_stage "hidden-user-provision"
+    provision_crm114_user
+
     set_stage "complete"
-    log_msg info "Initial checks complete"
+    log_msg info "Hidden user provisioning complete"
 }
 
 main "$@"

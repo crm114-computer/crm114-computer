@@ -132,7 +132,7 @@
 - [x] account-spec-uid-policy — Finalize UID/GID selection, collision detection, and documentation.
 - [x] account-spec-attributes — Produce authoritative attribute/filesystem matrix (dscl keys, permissions, SecureToken stance).
 - [x] account-spec-messaging — Draft Gum/simple-mode narratives explaining the hidden account to operators.
-- [ ] account-spec-docs — Update parent plan + research docs with finalized spec and acceptance criteria.
+- [x] account-spec-docs — Update parent plan + research docs with finalized spec and acceptance criteria.
 
 ## Linked Tasks
 - `account-spec-uid-policy`
