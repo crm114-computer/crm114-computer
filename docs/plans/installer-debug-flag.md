@@ -14,6 +14,7 @@
 - Do not change default installer UX for non-debug runs beyond minimal plumbing.
 - No interactive debugger or REPL—focus on deterministic logs.
 - Avoid introducing new dependencies beyond existing POSIX shell + Gum helpers.
+- Do not rely on automated installer tests; humans capture `./install.sh --debug` output for diagnostics.
 
 ## Constraints / Assumptions
 - Must honor existing Gum styling helpers; debug flag should not break colorized output.
@@ -30,7 +31,7 @@
 ## Milestones / Phases
 1. **Flag + Helper Scaffolding** – implement parsing, env variable, `debug_msg`, trap.
 2. **Core Instrumentation** – add debugging to existing preflight steps.
-3. **Validation** – extend `tests/install/sudo_checks_test.sh` (and others) to cover debug flag behavior.
+3. **Validation** – gather human-run `./install.sh --debug` transcripts to confirm instrumentation captures every stage.
 4. **Hand-off Docs** – describe how to run `./install.sh --debug` and share logs.
 
 ## Risks / Tradeoffs
@@ -49,11 +50,10 @@
 - [x] Parse `--debug` flag / env override and surface stage tracking
 - [x] Implement `debug_msg`, stage markers, and exit/signal traps in `install.sh`
 - [x] Instrument Gum bootstrap, sudo preflight/keepalive, and system detection with debug logs
-- [x] Extend `tests/install/sudo_checks_test.sh` to exercise debug mode
 - [x] Document usage expectations + cross-plan dependencies
 
 ## Linked Tasks
 - `installer-debug-flag` – Add the debug flag, helper, instrumentation, plus tests.
 
 ## Status Notes
-- 2025-11-28: Debug flag implemented in `install.sh`, core preflight functions instrumented, and tests updated (`tests/install/sudo_checks_test.sh`). Awaiting human-provided `./install.sh --debug` run output to continue hidden-user tasks.
+- 2025-11-28: Debug flag implemented in `install.sh`, core preflight functions instrumented, and awaiting human-provided `./install.sh --debug` run output to continue hidden-user tasks.

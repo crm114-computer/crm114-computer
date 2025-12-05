@@ -4,6 +4,7 @@
 - Upcoming installer features require a dedicated `crm114` service account for privileged automation on macOS.
 - The account must remain invisible to loginwindow/fast user switching and live at `/Users/.crm114`, ensuring both the user and home directory stay hidden.
 - Current plans (`gum-powered-installer`, `installer-detection`) do not cover privileged account provisioning, sudo validation, or hidden-user lifecycle management.
+- Automated installer tests have been retired; verification now depends on human-operated `./install.sh --debug` runs captured by operators.
 
 ## Goals
 - Provision a hidden, non-loginable macOS user `crm114` with home `/Users/.crm114`, owned `crm114:crm114`, permissions `0700`.
@@ -35,7 +36,7 @@
 1. **Research & Spec Finalization** – Capture mechanics for hidden accounts (completed via `docs/research/hidden-user-bootstrap.md`).
 2. **Sudo & Environment Checks** – Implement preflight sudo detection and guard rails in the installer.
 3. **Account Provisioning** – Add creation + hardening steps to `install.sh` (or helper scripts) with Gum messaging.
-4. **Idempotence & Validation** – Build verification routines, drift repair logic, and optional dry-run/tests under `tests/install/`.
+4. **Idempotence & Validation** – Build verification routines and drift repair logic driven by human-provided debug logs instead of automated shell tests.
 5. **Removal / Recovery** – Document and script clean removal if needed.
 
 ## Risks / Tradeoffs

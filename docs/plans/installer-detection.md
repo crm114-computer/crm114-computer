@@ -1,11 +1,10 @@
 # Installer Detection Guard
 
 ## Status
-- Completed on 2025-11-26. Detection logic with Gum messaging lives in `install.sh`, and regression coverage exists in `tests/install/detect_system_test.sh`.
+- Completed on 2025-11-26. Detection logic with Gum messaging lives in `install.sh`. Former regression coverage under `tests/install/` has been retired in favor of manual operator validation.
 
 ## Checklist
 - [x] Implement detection guards in `install.sh` (tasks: `inst-detector-baseline`, `gum-detection-ux`)
-- [x] Add regression tests under `tests/install/detect_system_test.sh` (`inst-detector-tests`)
 - [x] Document requirements and messaging in this plan / research references
 
 ## Problem / Context

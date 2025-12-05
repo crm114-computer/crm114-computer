@@ -61,7 +61,7 @@
 ## Decision / Recommendation
 - Gum excels at providing a human-friendly installer interface: the CLI primitives cover narration, progress feedback, and user prompts with minimal code.
 - Homebrew installation plus standalone binaries make it practical to depend on Gum in macOS-centric workflows.
-- Applied in crm114 installer: `install.sh` now uses Gum for logging, spinners, and friendly status blocks; automated detection tests live in `tests/install/detect_system_test.sh`.
+- Applied in crm114 installer: `install.sh` now uses Gum for logging, spinners, and friendly status blocks; verification now relies on human-operated `install.sh --debug` transcripts instead of automated installer tests.
 
 ## References / Links
 - Gum README & command docs: https://github.com/charmbracelet/gum

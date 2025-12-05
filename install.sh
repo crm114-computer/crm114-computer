@@ -8,6 +8,7 @@ CRM114_COLOR_WARN="#FFAF00"
 CRM114_COLOR_ERROR="#FF5F5F"
 CRM114_SIMPLE_MODE="${CRM114_INSTALLER_SIMPLE:-}"
 CRM114_WORK_DIR="${CRM114_WORK_DIR:-$HOME/.crm114}"
+CRM114_DEBUG_LOG="${CRM114_DEBUG_LOG:-}"
 GUM_AVAILABLE=0
 CRM114_SUDO_KEEPALIVE_PID=""
 CRM114_SUDO_REFRESH_INTERVAL="${CRM114_SUDO_REFRESH_INTERVAL:-60}"
@@ -22,6 +23,7 @@ CRM114_HIDDEN_HOME="${CRM114_HIDDEN_HOME:-/Users/.crm114}"
 CRM114_HIDDEN_SENTINEL="${CRM114_HIDDEN_SENTINEL:-$CRM114_HIDDEN_HOME/.crm114-profile}"
 CRM114_SKIP_PROVISIONING="${CRM114_SKIP_PROVISIONING:-}"
 CRM114_PRIVILEGED_WRAPPER="${CRM114_PRIVILEGED_WRAPPER:-}"
+CRM114_DEBUG_LOG="${CRM114_DEBUG_LOG:-}"
 
 set_gum_available() {
     debug_msg "Evaluating Gum availability (simple_mode='${CRM114_SIMPLE_MODE:-}')"
@@ -130,6 +132,9 @@ debug_msg() {
         gum log --level debug "[$timestamp] $*" >&2
     else
         printf '[debug %s] %s\n' "$timestamp" "$*" >&2
+    fi
+    if [ -n "$CRM114_DEBUG_LOG" ]; then
+        printf '[%s] %s\n' "$timestamp" "$*" >>"$CRM114_DEBUG_LOG"
     fi
 }
 
