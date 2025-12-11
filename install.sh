@@ -21,8 +21,11 @@ CRM114_SERVICE_USER="${CRM114_SERVICE_USER:-crm114}"
 CRM114_SERVICE_REALNAME="${CRM114_SERVICE_REALNAME:-CRM114 Service Account}"
 CRM114_HIDDEN_HOME="${CRM114_HIDDEN_HOME:-/Users/.crm114}"
 CRM114_HIDDEN_SENTINEL="${CRM114_HIDDEN_SENTINEL:-$CRM114_HIDDEN_HOME/.crm114-profile}"
+CRM114_LOGINWINDOW_PLIST="${CRM114_LOGINWINDOW_PLIST:-/Library/Preferences/com.apple.loginwindow.plist}"
+CRM114_UNINSTALL_FIRST=0
 CRM114_SKIP_PROVISIONING="${CRM114_SKIP_PROVISIONING:-}"
 CRM114_PRIVILEGED_WRAPPER="${CRM114_PRIVILEGED_WRAPPER:-}"
+CRM114_PRIV_LOG="${CRM114_PRIV_LOG:-}"
 CRM114_DEBUG_LOG="${CRM114_DEBUG_LOG:-}"
 
 set_gum_available() {
@@ -51,7 +54,7 @@ style_box() {
             --margin "1 0" \
             --align left \
             --width 72 \
-            "$*"
+            "$@"
     else
         printf '%s\n' "$*"
     fi
@@ -89,7 +92,7 @@ log_msg() {
     level="$1"
     shift
     if use_gum; then
-        gum log --level "$level" "$*"
+        gum log --level "$level" -- "$@"
     else
         printf '[%s] %s\n' "$level" "$*"
     fi
@@ -148,8 +151,9 @@ usage() {
 Usage: ./install.sh [OPTIONS]
 
 Options:
-  --debug          Enable verbose diagnostic logging (or set CRM114_INSTALLER_DEBUG=1)
-  -h, --help       Show this help message and exit
+  --debug              Enable verbose diagnostic logging (or set CRM114_INSTALLER_DEBUG=1)
+  --uninstall-first    Prompt to remove the existing crm114 user, home, and plist entries before provisioning
+  -h, --help           Show this help message and exit
 EOF
 }
 
@@ -158,6 +162,9 @@ parse_args() {
         case "$1" in
             --debug)
                 CRM114_DEBUG=1
+                ;;
+            --uninstall-first)
+                CRM114_UNINSTALL_FIRST=1
                 ;;
             -h|--help)
                 usage
@@ -187,34 +194,23 @@ with_spinner() {
     fi
 }
 
-run_privileged_with_spinner() {
-    title="$1"
-    shift
-    if [ -n "$CRM114_PRIVILEGED_WRAPPER" ]; then
-        set -- "$CRM114_PRIVILEGED_WRAPPER" "$@"
-    else
-        set -- sudo "$@"
-    fi
-    with_spinner "$title" "$@"
-}
-
-run_privileged_and_log() {
+run_privileged_with_spinner_logged() {
     stage="$1"
     shift
-    log_entry="$stage | $*"
+    title="$1"
+    shift
+    cmd="$1"
+    shift
+    log_entry="$stage | $cmd $*"
     if [ -n "$CRM114_PRIV_LOG" ]; then
         printf '%s
 ' "$log_entry" >>"$CRM114_PRIV_LOG"
     fi
-    run_privileged "$@"
-}
-
-run_privileged_with_spinner_logged() {
-    stage="$1"
-    shift
-    cmd="$1"
-    shift
-    run_privileged_and_log "$stage" "$cmd" "$cmd" "$@"
+    if [ -n "$CRM114_PRIVILEGED_WRAPPER" ]; then
+        with_spinner "$title" "$CRM114_PRIVILEGED_WRAPPER" "$cmd" "$@"
+    else
+        with_spinner "$title" sudo "$cmd" "$@"
+    fi
 }
 
 has_brew() {
@@ -400,9 +396,9 @@ user_exists() {
 }
 
 ensure_hidden_home_directory() {
-    run_privileged createhomedir -c -u "$CRM114_SERVICE_USER" >/dev/null
-    run_privileged chown -R "$CRM114_SERVICE_USER:$CRM114_SERVICE_USER" "$CRM114_HIDDEN_HOME"
-    run_privileged chmod 700 "$CRM114_HIDDEN_HOME"
+    run_privileged_with_spinner_logged "hidden-user-provision" "createhomedir" createhomedir -c -u "$CRM114_SERVICE_USER" >/dev/null
+    run_privileged_with_spinner_logged "hidden-user-provision" "chown hidden home" chown -R "$CRM114_SERVICE_USER:$CRM114_SERVICE_USER" "$CRM114_HIDDEN_HOME"
+    run_privileged_with_spinner_logged "hidden-user-provision" "chmod hidden home" chmod 700 "$CRM114_HIDDEN_HOME"
     if [ ! -d "$CRM114_HIDDEN_HOME" ]; then
         fail "Hidden home $CRM114_HIDDEN_HOME missing after createhomedir"
     fi
@@ -412,8 +408,147 @@ write_hidden_profile_sentinel() {
     metadata="created=$(current_timestamp)"
     tmpfile=$(mktemp)
     printf '%s\n' "$metadata" >"$tmpfile"
-    run_privileged install -m 600 -o "$CRM114_SERVICE_USER" -g "$CRM114_SERVICE_USER" "$tmpfile" "$CRM114_HIDDEN_SENTINEL"
+    run_privileged_with_spinner_logged "hidden-user-provision" "Install sentinel" install -m 600 -o "$CRM114_SERVICE_USER" -g "$CRM114_SERVICE_USER" "$tmpfile" "$CRM114_HIDDEN_SENTINEL"
     rm -f "$tmpfile"
+}
+
+ensure_auth_hiding_attributes() {
+    run_privileged_with_spinner_logged "hidden-user-hiding" "Disable auth" dscl . -create "/Users/$CRM114_SERVICE_USER" AuthenticationAuthority ";DisabledUser;"
+    run_privileged_with_spinner_logged "hidden-user-hiding" "Apply IsHidden" dscl . -create "/Users/$CRM114_SERVICE_USER" IsHidden 1
+}
+
+read_loginwindow_hidden_users() {
+    run_privileged python3 - "$CRM114_LOGINWINDOW_PLIST" <<'PY'
+import plistlib
+import sys
+from pathlib import Path
+plist_path = Path(sys.argv[1])
+try:
+    with plist_path.open("rb") as handle:
+        data = plistlib.load(handle)
+except Exception:
+    data = {}
+entries = []
+for entry in data.get("HiddenUsersList") or []:
+    if isinstance(entry, str):
+        val = entry.strip()
+        if val:
+            entries.append(val)
+print("\n".join(entries))
+PY
+}
+
+ensure_hidden_user_loginwindow_entry() {
+    run_privileged_with_spinner_logged "hidden-user-hiding" "Ensure HiddenUsersList" python3 - "$CRM114_LOGINWINDOW_PLIST" "$CRM114_SERVICE_USER" <<'PY'
+import plistlib
+import sys
+from pathlib import Path
+plist_path = Path(sys.argv[1])
+user = sys.argv[2]
+try:
+    with plist_path.open("rb") as handle:
+        data = plistlib.load(handle)
+except Exception:
+    data = {}
+entries = []
+for entry in data.get("HiddenUsersList") or []:
+    if isinstance(entry, str):
+        val = entry.strip()
+        if val and val not in entries:
+            entries.append(val)
+if user not in entries:
+    entries.append(user)
+data["HiddenUsersList"] = entries
+plist_path.parent.mkdir(parents=True, exist_ok=True)
+with plist_path.open("wb") as handle:
+    plistlib.dump(data, handle)
+PY
+}
+
+loginwindow_hidden_list_contains_user() {
+    hidden_users=$(read_loginwindow_hidden_users 2>/dev/null || true)
+    if printf '%s\n' "$hidden_users" | grep -Fx "$CRM114_SERVICE_USER" >/dev/null 2>&1; then
+        return 0
+    fi
+    return 1
+}
+
+remove_hidden_user_from_loginwindow() {
+    run_privileged_with_spinner_logged "hidden-user-uninstall" "Prune HiddenUsersList" python3 - "$CRM114_LOGINWINDOW_PLIST" "$CRM114_SERVICE_USER" <<'PY'
+import plistlib
+import sys
+from pathlib import Path
+plist_path = Path(sys.argv[1])
+user = sys.argv[2]
+try:
+    with plist_path.open("rb") as handle:
+        data = plistlib.load(handle)
+except Exception:
+    data = {}
+entries = []
+for entry in data.get("HiddenUsersList") or []:
+    if isinstance(entry, str):
+        val = entry.strip()
+        if val and val != user and val not in entries:
+            entries.append(val)
+data["HiddenUsersList"] = entries
+plist_path.parent.mkdir(parents=True, exist_ok=True)
+with plist_path.open("wb") as handle:
+    plistlib.dump(data, handle)
+PY
+}
+
+
+verify_hidden_user_state() {
+    auth_value=$(read_dscl_value AuthenticationAuthority)
+    if [ "$auth_value" != ";DisabledUser;" ]; then
+        warn_msg "AuthenticationAuthority drift detected for $CRM114_SERVICE_USER (value='$auth_value')"
+    fi
+
+    hidden_value=$(read_dscl_value IsHidden)
+    if [ "$hidden_value" != "1" ]; then
+        warn_msg "IsHidden attribute drift detected for $CRM114_SERVICE_USER (value='$hidden_value')"
+    fi
+
+    if loginwindow_hidden_list_contains_user; then
+        debug_msg "HiddenUsersList includes $CRM114_SERVICE_USER"
+    else
+        warn_msg "HiddenUsersList missing $CRM114_SERVICE_USER; GUI hiding may fail"
+    fi
+}
+
+prompt_uninstall_hidden_user() {
+    if [ "$CRM114_UNINSTALL_FIRST" -ne 1 ]; then
+        return
+    fi
+
+    if ! user_exists; then
+        warn_msg "--uninstall-first requested but user $CRM114_SERVICE_USER is missing; continuing"
+        return
+    fi
+
+    log_msg warn "--uninstall-first will delete $CRM114_SERVICE_USER and recreate the account."
+
+    style_box "$CRM114_COLOR_WARN" "--uninstall-first requested. This will delete $CRM114_SERVICE_USER, $CRM114_HIDDEN_HOME, and related loginwindow entries before provisioning."
+
+    if use_gum; then
+        if ! gum confirm "Remove existing $CRM114_SERVICE_USER before continuing?"; then
+            fail "Uninstall aborted at operator request"
+        fi
+    else
+        printf 'Type DELETE to confirm removal of %s: ' "$CRM114_SERVICE_USER"
+        read -r confirmation || fail "Unable to read confirmation"
+        if [ "$confirmation" != "DELETE" ]; then
+            fail "Uninstall aborted"
+        fi
+    fi
+
+    run_privileged_with_spinner_logged "hidden-user-uninstall" "Remove user" dscl . -delete "/Users/$CRM114_SERVICE_USER" 2>/dev/null || true
+    run_privileged_with_spinner_logged "hidden-user-uninstall" "Remove group" dscl . -delete "/Groups/$CRM114_SERVICE_USER" 2>/dev/null || true
+    run_privileged_with_spinner_logged "hidden-user-uninstall" "Remove home" rm -rf "$CRM114_HIDDEN_HOME"
+    remove_hidden_user_from_loginwindow
+
+    log_msg info "Existing hidden user removed"
 }
 
 provision_crm114_user() {
@@ -423,12 +558,13 @@ provision_crm114_user() {
     fi
 
     ensure_privileged_tools
+    prompt_uninstall_hidden_user
 
     if user_exists; then
         log_msg info "Hidden user $CRM114_SERVICE_USER already exists; ensuring attributes"
     else
         temp_password="crm114-$(LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c 32)"
-        run_privileged_with_spinner "Creating hidden user" sysadminctl \
+        run_privileged_with_spinner_logged "hidden-user-provision" "Creating hidden user" sysadminctl \
             -addUser "$CRM114_SERVICE_USER" \
             -fullName "$CRM114_SERVICE_REALNAME" \
             -home "$CRM114_HIDDEN_HOME" \
@@ -441,26 +577,25 @@ EOF
     uid=$(read_dscl_value UniqueID)
     [ -n "$uid" ] || fail "Failed to read UID for $CRM114_SERVICE_USER"
 
-    if ! run_privileged dscl . -read "/Groups/$CRM114_SERVICE_USER" >/dev/null 2>&1; then
-        run_privileged dscl . -create "/Groups/$CRM114_SERVICE_USER"
-    fi
-    run_privileged dscl . -create "/Groups/$CRM114_SERVICE_USER" PrimaryGroupID "$uid"
-    run_privileged dscl . -create "/Groups/$CRM114_SERVICE_USER" Password "*"
-    run_privileged dscl . -create "/Groups/$CRM114_SERVICE_USER" RecordName "$CRM114_SERVICE_USER"
-    run_privileged dscl . -append "/Groups/$CRM114_SERVICE_USER" GroupMembership "$CRM114_SERVICE_USER"
-    run_privileged dscl . -create "/Users/$CRM114_SERVICE_USER" PrimaryGroupID "$uid"
+    run_privileged_with_spinner_logged "hidden-user-provision" "Ensure crm114 group" dscl . -create "/Groups/$CRM114_SERVICE_USER"
+    run_privileged_with_spinner_logged "hidden-user-provision" "Align group GID" dscl . -create "/Groups/$CRM114_SERVICE_USER" PrimaryGroupID "$uid"
+    run_privileged_with_spinner_logged "hidden-user-provision" "Lock group password" dscl . -create "/Groups/$CRM114_SERVICE_USER" Password "*"
+    run_privileged_with_spinner_logged "hidden-user-provision" "Set group record" dscl . -create "/Groups/$CRM114_SERVICE_USER" RecordName "$CRM114_SERVICE_USER"
+    run_privileged_with_spinner_logged "hidden-user-provision" "Ensure group membership" dscl . -append "/Groups/$CRM114_SERVICE_USER" GroupMembership "$CRM114_SERVICE_USER"
+    run_privileged_with_spinner_logged "hidden-user-provision" "Assign primary GID" dscl . -create "/Users/$CRM114_SERVICE_USER" PrimaryGroupID "$uid"
 
-    run_privileged dscl . -create "/Users/$CRM114_SERVICE_USER" RecordName "$CRM114_SERVICE_USER"
-    run_privileged dscl . -create "/Users/$CRM114_SERVICE_USER" RealName "$CRM114_SERVICE_REALNAME"
-    run_privileged dscl . -create "/Users/$CRM114_SERVICE_USER" UserShell /usr/bin/false
-    run_privileged dscl . -create "/Users/$CRM114_SERVICE_USER" NFSHomeDirectory "$CRM114_HIDDEN_HOME"
-    run_privileged dscl . -create "/Users/$CRM114_SERVICE_USER" Password "*"
-    run_privileged_nonfatal dscl . -delete "/Users/$CRM114_SERVICE_USER" ShadowHashData 2>/dev/null || true
-    run_privileged dscl . -create "/Users/$CRM114_SERVICE_USER" AuthenticationAuthority ";DisabledUser;"
-    run_privileged dscl . -create "/Users/$CRM114_SERVICE_USER" IsHidden 1
+    run_privileged_with_spinner_logged "hidden-user-provision" "Set DirectoryService names" dscl . -create "/Users/$CRM114_SERVICE_USER" RecordName "$CRM114_SERVICE_USER"
+    run_privileged_with_spinner_logged "hidden-user-provision" "Set real name" dscl . -create "/Users/$CRM114_SERVICE_USER" RealName "$CRM114_SERVICE_REALNAME"
+    run_privileged_with_spinner_logged "hidden-user-provision" "Lock shell" dscl . -create "/Users/$CRM114_SERVICE_USER" UserShell /usr/bin/false
+    run_privileged_with_spinner_logged "hidden-user-provision" "Set hidden home" dscl . -create "/Users/$CRM114_SERVICE_USER" NFSHomeDirectory "$CRM114_HIDDEN_HOME"
+    run_privileged_with_spinner_logged "hidden-user-provision" "Set password star" dscl . -create "/Users/$CRM114_SERVICE_USER" Password "*"
+    run_privileged_with_spinner_logged "hidden-user-provision" "Remove hash" dscl . -delete "/Users/$CRM114_SERVICE_USER" ShadowHashData 2>/dev/null || true
 
     ensure_hidden_home_directory
+    ensure_auth_hiding_attributes
+    ensure_hidden_user_loginwindow_entry
     write_hidden_profile_sentinel
+    verify_hidden_user_state
 
     log_msg info "Hidden user $CRM114_SERVICE_USER provisioned"
 }

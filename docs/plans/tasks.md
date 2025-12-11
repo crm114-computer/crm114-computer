@@ -2,11 +2,12 @@
 
 ## Next Task
 
-- [ ] hidden-user-provisioning — Implement account creation, passwordless hardening, and home directory setup in install.sh (plan: hidden-user-bootstrap)
+- [ ] tests-path-scrub — Remove every legacy tests path reference across the repo and update guidance (plan: tests-path-removal)
+- [x] hidden-user-hiding — Apply IsHidden, HiddenUsersList updates, AuthenticationAuthority changes, and verify GUI suppression (plan: hidden-user-bootstrap)
 
 ## Upcoming Tasks
 
-- [ ] hidden-user-hiding — Apply IsHidden, HiddenUsersList updates, AuthenticationAuthority changes, and verify GUI suppression (plan: hidden-user-bootstrap)
+- [ ] tests-path-guard — Add automated enforcement preventing the legacy tests path from reappearing (plan: tests-path-removal)
 - [ ] hidden-user-idempotence — Build verification/drift-repair logic and add scripted tests (plan: hidden-user-bootstrap)
 - [ ] hidden-user-removal — Provide uninstaller routines to delete the account, hidden home, and related plist entries (plan: hidden-user-bootstrap)
 
@@ -25,4 +26,5 @@
 - [x] gum-bootstrap — Ensure Gum dependency management in install.sh (plan: gum-powered-installer)
 - [x] gum-detection-ux — Reskin detection flow using Gum messaging (plan: gum-powered-installer)
 - [x] inst-detector-baseline — Implement OS/arch detection in install.sh (plan: installer-detection)
+- [x] hidden-user-provisioning — Implement account creation, passwordless hardening, and home directory setup in install.sh (plan: hidden-user-bootstrap)
 - [x] Scaffold ./docs/plans/tasks.md

@@ -1,7 +1,7 @@
 # Installer Detection Guard
 
 ## Status
-- Completed on 2025-11-26. Detection logic with Gum messaging lives in `install.sh`. Former regression coverage under `tests/install/` has been retired in favor of manual operator validation.
+- Completed on 2025-11-26. Detection logic with Gum messaging lives in `install.sh`. Former regression coverage has been retired in favor of manual operator validation.
 
 ## Checklist
 - [x] Implement detection guards in `install.sh` (tasks: `inst-detector-baseline`, `gum-detection-ux`)

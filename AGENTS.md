@@ -30,7 +30,7 @@ You must respect this layout unless explicitly instructed otherwise by the user 
 
 - `install.sh`  
   Environment setup or project bootstrapping. Modify with care and only when necessary as part of a planned change.
-  - Never execute `./install.sh` or other installer entrypoints directly; defer manual runs to the human operator and rely on scripted tests under `./tests/` instead.
+  - Never execute `./install.sh` or other installer entrypoints directly; defer manual runs to the human operator and rely on scripted validation instead.
 
 If you are unsure where something belongs:
 1. Prefer `docs/` for writing.
